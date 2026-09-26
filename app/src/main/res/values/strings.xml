@@ -43,6 +43,8 @@
 
     <string name="remote_console">Remote console</string>
     <string name="web_interface">Web interface</string>
+    <string name="web_diagnostics">Diagnostics</string>
+    <string name="web_copy">Copy</string>
     <string name="web_open_browser">Open in browser</string>
     <string name="web_load_failed">The page could not be loaded</string>
     <string name="overview">Overview</string>

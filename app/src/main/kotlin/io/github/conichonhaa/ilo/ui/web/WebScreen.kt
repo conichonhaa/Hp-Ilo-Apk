@@ -6,7 +6,10 @@ import android.net.Uri
 import android.net.http.SslCertificate
 import android.net.http.SslError
 import android.os.Build
+import android.webkit.ConsoleMessage
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.WebResourceResponse
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -22,7 +25,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -79,6 +91,9 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
     var canGoBack by remember { mutableStateOf(false) }
     var certPrompt by remember { mutableStateOf<CertPrompt?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    val log = remember { mutableStateListOf<String>() }
+    var showLog by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
 
     val baseUrl = server?.let { IloClient.normalizeAddress(it.address) }?.let { "https://$it/" }
 
@@ -103,6 +118,9 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
                         loadError = null
                         webView?.reload()
                     }) { Icon(Icons.Default.Refresh, stringResource(R.string.refresh)) }
+                    IconButton(onClick = { showLog = !showLog }) {
+                        Icon(Icons.Default.BugReport, stringResource(R.string.web_diagnostics))
+                    }
                     IconButton(onClick = ::openExternally) {
                         Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.web_open_browser))
                     }
@@ -127,6 +145,10 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
                                     onHistory = { canGoBack = it },
                                     onCertificate = { certPrompt = it },
                                     onError = { loadError = it },
+                                    log = { line ->
+                                        log += line
+                                        if (log.size > 200) log.removeAt(0)
+                                    },
                                 ).also {
                                     it.loadUrl(baseUrl)
                                     webView = it
@@ -134,6 +156,22 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
                             },
                             onRelease = { it.destroy() },
                         )
+                    }
+                    if (showLog) {
+                        Surface(Modifier.fillMaxSize(), tonalElevation = 4.dp) {
+                            Column(Modifier.fillMaxSize().padding(12.dp)) {
+                                androidx.compose.foundation.layout.Row {
+                                    Text(stringResource(R.string.web_diagnostics), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = { clipboard.setText(AnnotatedString(log.joinToString("\n"))) }) {
+                                        Text(stringResource(R.string.web_copy))
+                                    }
+                                    TextButton(onClick = { showLog = false }) { Text(stringResource(R.string.close)) }
+                                }
+                                SelectionContainer(Modifier.verticalScroll(rememberScrollState())) {
+                                    Text(log.joinToString("\n"), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
                     }
                     loadError?.let { message ->
                         Surface(Modifier.fillMaxSize()) {
@@ -176,7 +214,12 @@ private fun createWebView(
     onHistory: (Boolean) -> Unit,
     onCertificate: (CertPrompt) -> Unit,
     onError: (String) -> Unit,
+    log: (String) -> Unit,
 ): WebView = WebView(ctx).apply {
+    // Allows inspecting the page from a computer with chrome://inspect.
+    WebView.setWebContentsDebuggingEnabled(true)
+    log("WebView ${WebView.getCurrentWebViewPackage()?.versionName ?: "?"}")
+    log("Trusted fingerprint: ${server.certFingerprint ?: "none"}")
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
     settings.javaScriptCanOpenWindowsAutomatically = true
@@ -192,12 +235,21 @@ private fun createWebView(
 
     webChromeClient = object : WebChromeClient() {
         override fun onProgressChanged(view: WebView, newProgress: Int) = onProgress(newProgress)
+
+        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+            if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR || message.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
+                log("JS ${message.messageLevel()}: ${message.message()} (${message.sourceId()?.substringAfterLast('/')}:${message.lineNumber()})")
+            }
+            return true
+        }
     }
     webViewClient = object : WebViewClient() {
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
             val der = certificateBytes(error.certificate)
             val fp = der?.let { CertificatePinning.fingerprint(it) }
-            if (fp != null && CertificatePinning.matches(fp, server.certFingerprint)) {
+            val matches = fp != null && CertificatePinning.matches(fp, server.certFingerprint)
+            log("SSL error ${error.primaryError} for ${error.url}: certificate ${fp ?: "unreadable"} -> ${if (matches) "accepted (pinned)" else "refused"}")
+            if (matches) {
                 handler.proceed()
             } else {
                 handler.cancel()
@@ -212,10 +264,27 @@ private fun createWebView(
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+            log("Load error ${error.errorCode} ${error.description} for ${request.url}")
             if (request.isForMainFrame) onError("${error.description} (${error.errorCode})")
         }
 
+        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+            log("HTTP ${response.statusCode} for ${request.url}")
+        }
+
+        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            log("Loading $url")
+        }
+
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            log("Renderer crashed")
+            onError("Renderer crashed")
+            return true
+        }
+
         override fun onPageFinished(view: WebView, url: String?) {
+            log("Loaded $url (title: ${view.title})")
+            view.evaluateJavascript("document.body ? document.body.innerHTML.length : -1") { len -> log("Body size: $len") }
             view.evaluateJavascript(autofillScript(server.username, server.password), null)
         }
 

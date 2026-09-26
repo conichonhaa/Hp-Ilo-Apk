@@ -41,6 +41,8 @@
 
     <string name="remote_console">Console distante</string>
     <string name="web_interface">Interface web</string>
+    <string name="web_diagnostics">Diagnostic</string>
+    <string name="web_copy">Copier</string>
     <string name="web_open_browser">Ouvrir dans le navigateur</string>
     <string name="web_load_failed">La page n\'a pas pu être chargée</string>
     <string name="overview">Vue d\'ensemble</string>
