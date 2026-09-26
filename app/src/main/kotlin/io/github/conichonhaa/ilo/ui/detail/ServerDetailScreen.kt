@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Edit
@@ -22,6 +23,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -78,6 +84,18 @@ fun ServerDetailScreen(
     val snackbar = remember { SnackbarHostState() }
     var confirmPower by remember { mutableStateOf<ResetType?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.mediaMessage, state.mediaError) {
+        val msg = when {
+            state.mediaMessage != null -> context.getString(state.mediaMessage!!)
+            state.mediaError != null -> describeError(context, state.mediaError)
+            else -> null
+        }
+        if (msg != null) {
+            snackbar.showSnackbar(msg)
+            vm.clearMediaMessage()
+        }
+    }
 
     LaunchedEffect(state.actionDone, state.actionError) {
         val msg = when {
@@ -149,6 +167,14 @@ fun ServerDetailScreen(
                         InfoRow(R.string.info_bios, o.biosVersion)
                     }
                 }
+            }
+
+            if (state.mediaLoaded) {
+                VirtualMediaCard(
+                    state = state,
+                    onInsert = vm::insertMedia,
+                    onEject = vm::ejectMedia,
+                )
             }
 
             Card(Modifier.fillMaxWidth()) {
@@ -238,5 +264,62 @@ private fun InfoRow(label: Int, value: String?, color: Color? = null) {
             color = color ?: MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(0.6f),
         )
+    }
+}
+
+@Composable
+private fun VirtualMediaCard(
+    state: DetailUiState,
+    onInsert: (String, Boolean) -> Unit,
+    onEject: () -> Unit,
+) {
+    val media = state.media
+    var url by rememberSaveable { mutableStateOf("") }
+    var boot by rememberSaveable { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Album, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.media_title), style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                if (state.mediaBusy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            if (media == null) {
+                Text(stringResource(R.string.media_unavailable), style = MaterialTheme.typography.bodySmall)
+                return@Column
+            }
+            val image = media.image
+            Text(
+                if (media.inserted && image != null) stringResource(R.string.media_current, image)
+                else stringResource(R.string.media_none),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (media.inserted) {
+                OutlinedButton(onClick = onEject, enabled = !state.mediaBusy, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.media_eject))
+                }
+            }
+            HorizontalDivider()
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text(stringResource(R.string.media_url)) },
+                placeholder = { Text("http://192.168.1.10/debian.iso") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(stringResource(R.string.media_url_hint), style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = boot, onCheckedChange = { boot = it })
+                Text(stringResource(R.string.media_boot_next))
+            }
+            Button(
+                onClick = { onInsert(url, boot) },
+                enabled = !state.mediaBusy && (url.startsWith("http://") || url.startsWith("https://")),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.media_insert)) }
+        }
     }
 }

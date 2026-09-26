@@ -111,4 +111,15 @@
     <string name="close_connection_lost">The connection with the iLO was lost.</string>
     <string name="close_seized">Another user took over the remote console.</string>
     <string name="close_server_closed">The iLO closed the remote console.</string>
+    <string name="media_title">Virtual media</string>
+    <string name="media_unavailable">No virtual CD/DVD drive found (Redfish is required: iLO 4 firmware 2.30 or later).</string>
+    <string name="media_none">No image connected.</string>
+    <string name="media_current">Connected: %1$s</string>
+    <string name="media_eject">Eject</string>
+    <string name="media_url">ISO image URL</string>
+    <string name="media_url_hint">The image is downloaded by the iLO itself: use an http(s) address reachable from the iLO network (web server, NAS…). Mounting a URL requires an iLO Advanced licence.</string>
+    <string name="media_boot_next">Boot from this image on the next server reset</string>
+    <string name="media_insert">Connect the image</string>
+    <string name="media_inserted">Image connected</string>
+    <string name="media_ejected">Image ejected</string>
 </resources>

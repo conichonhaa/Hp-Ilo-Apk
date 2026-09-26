@@ -27,6 +27,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -94,6 +97,7 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
     var loadError by remember { mutableStateOf<String?>(null) }
     val log = remember { mutableStateListOf<String>() }
     var showLog by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
 
     val baseUrl = server?.let { IloClient.normalizeAddress(it.address) }?.let { "https://$it/" }
@@ -119,11 +123,21 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
                         loadError = null
                         webView?.reload()
                     }) { Icon(Icons.Default.Refresh, stringResource(R.string.refresh)) }
-                    IconButton(onClick = { showLog = !showLog }) {
-                        Icon(Icons.Default.BugReport, stringResource(R.string.web_diagnostics))
-                    }
                     IconButton(onClick = ::openExternally) {
                         Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.web_open_browser))
+                    }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more)) }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.web_diagnostics)) },
+                                leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null) },
+                                onClick = {
+                                    menu = false
+                                    showLog = true
+                                },
+                            )
+                        }
                     }
                 },
             )
@@ -223,8 +237,10 @@ private fun createWebView(
     // With the default WRAP_CONTENT height, "height: 100%" in the page resolves to 0 and the
     // iLO 4 interface (a full-height iframe) stays invisible.
     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    // Allows inspecting the page from a computer with chrome://inspect.
-    WebView.setWebContentsDebuggingEnabled(true)
+    // Debug builds: the page can be inspected from a computer with chrome://inspect.
+    if (ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        WebView.setWebContentsDebuggingEnabled(true)
+    }
     log("WebView ${WebView.getCurrentWebViewPackage()?.versionName ?: "?"}")
     log("Trusted fingerprint: ${server.certFingerprint ?: "none"}")
     settings.javaScriptEnabled = true

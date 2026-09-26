@@ -2,10 +2,12 @@ package io.github.conichonhaa.ilo.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.conichonhaa.ilo.R
 import io.github.conichonhaa.ilo.core.net.IloClient
 import io.github.conichonhaa.ilo.core.net.IloException
 import io.github.conichonhaa.ilo.core.net.ResetType
 import io.github.conichonhaa.ilo.core.net.ServerOverview
+import io.github.conichonhaa.ilo.core.net.VirtualMedia
 import io.github.conichonhaa.ilo.data.ServerConfig
 import io.github.conichonhaa.ilo.data.ServerRepository
 import io.github.conichonhaa.ilo.ui.common.CertPrompt
@@ -27,6 +29,11 @@ data class DetailUiState(
     val actionRunning: Boolean = false,
     val actionError: Throwable? = null,
     val actionDone: ResetType? = null,
+    val media: VirtualMedia? = null,
+    val mediaLoaded: Boolean = false,
+    val mediaBusy: Boolean = false,
+    val mediaError: Throwable? = null,
+    val mediaMessage: Int? = null,
 )
 
 class ServerDetailViewModel(private val repository: ServerRepository, private val serverId: String) : ViewModel() {
@@ -61,8 +68,52 @@ class ServerDetailViewModel(private val repository: ServerRepository, private va
                     certPrompt = CertPrompt.from(result.exceptionOrNull()),
                 )
             }
+            if (result.isSuccess) refreshMedia()
         }
     }
+
+    fun refreshMedia() {
+        val s = _state.value.server ?: return
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching { IloClient(s.address, s.certFingerprint).redfishVirtualMedia(s.username, s.password) }
+            }
+            _state.update { it.copy(media = r.getOrNull(), mediaLoaded = r.isSuccess) }
+        }
+    }
+
+    fun insertMedia(url: String, bootOnNextReset: Boolean) = mediaAction(R.string.media_inserted) { client, s, media ->
+        client.redfishInsertMedia(s.username, s.password, media, url.trim(), bootOnNextReset)
+    }
+
+    fun ejectMedia() = mediaAction(R.string.media_ejected) { client, s, media ->
+        client.redfishEjectMedia(s.username, s.password, media)
+    }
+
+    private fun mediaAction(done: Int, action: (IloClient, ServerConfig, VirtualMedia) -> Unit) {
+        val s = _state.value.server ?: return
+        val media = _state.value.media ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(mediaBusy = true, mediaError = null, mediaMessage = null) }
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val client = IloClient(s.address, s.certFingerprint)
+                    action(client, s, media)
+                    client.redfishVirtualMedia(s.username, s.password)
+                }
+            }
+            _state.update {
+                it.copy(
+                    mediaBusy = false,
+                    media = r.getOrNull() ?: it.media,
+                    mediaError = r.exceptionOrNull(),
+                    mediaMessage = done.takeIf { r.isSuccess },
+                )
+            }
+        }
+    }
+
+    fun clearMediaMessage() = _state.update { it.copy(mediaError = null, mediaMessage = null) }
 
     private fun fetchOverview(s: ServerConfig): ServerOverview {
         val client = IloClient(s.address, s.certFingerprint)

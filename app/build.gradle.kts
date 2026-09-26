@@ -14,8 +14,22 @@ android {
         applicationId = "io.github.conichonhaa.ilo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI run number, so every build installs as an update of the previous one.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "2.0.0"
+    }
+
+    // Release key, provided by the CI secrets (see README). Never commit a keystore.
+    val releaseKeystore = System.getenv("SIGNING_KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -23,9 +37,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the APK built by CI can be installed directly.
-            // Use your own keystore for a real distribution.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without the release key, fall back to the debug key so the APK stays installable.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

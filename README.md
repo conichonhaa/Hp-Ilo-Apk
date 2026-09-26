@@ -22,6 +22,8 @@ l'ancienne application, pour l'interopérabilité ; aucun code ni ressource HPE 
     F1–F12, Ctrl+Alt+Suppr… ;
   - bouton d'alimentation virtuel (appui bref, appui long, démarrage à froid, reset) ;
   - état de l'alimentation, santé du serveur et codes POST en direct.
+- **Média virtuel** : connexion d'une image ISO par URL au lecteur CD/DVD virtuel, éjection et
+  démarrage sur l'image au prochain redémarrage.
 - **Vue d'ensemble** du serveur (modèle, n° de série, état, firmware iLO/BIOS) via Redfish ou l'API
   JSON des anciens iLO, et **commandes d'alimentation Redfish**.
 - **Interface web** de l'iLO intégrée (identifiants pré-remplis), avec un bouton pour l'ouvrir
@@ -46,9 +48,23 @@ les APK :
 Pour publier une version téléchargeable directement, pousser un tag `v*` (ex. `v2.0.0`) : l'APK est
 alors attaché à une *Release* GitHub.
 
-> L'APK de release est signé avec la clé de debug du runner CI, qui change à chaque build : il faut
-> désinstaller l'ancienne version avant d'en installer une nouvelle. Pour une distribution durable,
-> configurez votre propre keystore dans `app/build.gradle.kts`.
+### Signature
+
+Pour que chaque nouvelle version s'installe par-dessus la précédente, l'APK de release doit toujours
+être signé avec la même clé. Elle est fournie au workflow par quatre *secrets* GitHub (Settings →
+Secrets and variables → Actions) :
+
+| Secret | Contenu |
+|---|---|
+| `SIGNING_KEYSTORE_BASE64` | le keystore `.jks` encodé en base64 (`base64 -w0 release.jks`) |
+| `SIGNING_STORE_PASSWORD` | mot de passe du keystore |
+| `SIGNING_KEY_ALIAS` | alias de la clé |
+| `SIGNING_KEY_PASSWORD` | mot de passe de la clé |
+
+Une clé se crée avec :
+`keytool -genkeypair -keystore release.jks -storetype PKCS12 -alias ilo-console -keyalg RSA -keysize 4096 -validity 10000`.
+Sans ces secrets, l'APK est signé avec la clé de debug du runner, qui change à chaque build (il faut
+alors désinstaller l'application avant chaque mise à jour). Ne commitez jamais de keystore.
 
 ## Compiler soi-même
 
@@ -69,8 +85,9 @@ Prérequis : JDK 17+ et le SDK Android (API 35).
 ## Limites connues
 
 - Pas de support iLO 2 et antérieurs (pas d'API JSON).
-- Le média virtuel (montage d'ISO) et l'exécution de scripts RIBCL / QR code de l'ancienne
-  application ne sont pas repris.
+- L'exécution de scripts RIBCL / QR code de l'ancienne application n'est pas reprise.
+- Le média virtuel passe par Redfish (iLO 4 firmware 2.30+) et monte une image par URL http(s),
+  téléchargée par l'iLO lui-même (licence iLO Advanced requise) : pas d'ISO stocké sur le téléphone.
 - Sans licence iLO Advanced, l'iLO n'autorise la console que pendant le POST (limitation HPE).
 - Les très vieux firmwares iLO 3 n'acceptant que TLS 1.0 peuvent ne plus être joignables depuis les
   Android récents : mettez le firmware à jour.

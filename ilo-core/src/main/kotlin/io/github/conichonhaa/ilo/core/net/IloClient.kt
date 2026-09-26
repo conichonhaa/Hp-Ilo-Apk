@@ -1,9 +1,11 @@
 package io.github.conichonhaa.ilo.core.net
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -57,6 +59,19 @@ data class ServerOverview(
     val biosVersion: String? = null,
     val health: String? = null,
     val powerState: String? = null,
+)
+
+/** The virtual CD/DVD drive of the iLO. */
+data class VirtualMedia(
+    val path: String,
+    val image: String?,
+    val inserted: Boolean,
+    val bootOnNextReset: Boolean?,
+    /** Target of the Redfish InsertMedia action (iLO 5+), null when the image is set by PATCH (iLO 4). */
+    val insertTarget: String?,
+    val ejectTarget: String?,
+    /** "Hpe" (iLO 5+) or "Hp" (iLO 4). */
+    val oemKey: String,
 )
 
 /** Power actions accepted by the Redfish `ComputerSystem.Reset` action. */
@@ -172,6 +187,68 @@ class IloClient(address: String, private val pinnedFingerprint: String?) {
         )
     }
 
+    /** The CD/DVD virtual media device, or null if the iLO has none. */
+    fun redfishVirtualMedia(username: String, password: String): VirtualMedia? {
+        val auth = basicAuth(username, password)
+        val r = request("GET", "/redfish/v1/Managers/1/VirtualMedia/", headers = auth)
+        checkRedfish(r)
+        val members = (parseObject(r.body)?.get("Members") as? JsonArray).orEmpty()
+        for (m in members) {
+            val path = ((m as? JsonObject)?.string("@odata.id")) ?: continue
+            val vr = request("GET", path, headers = auth)
+            if (vr.code != 200) continue
+            val o = parseObject(vr.body) ?: continue
+            val types = (o["MediaTypes"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+            if (types.none { it.equals("CD", true) || it.equals("DVD", true) }) continue
+            val oem = o["Oem"] as? JsonObject
+            val oemKey = if (oem?.containsKey("Hpe") == true) "Hpe" else "Hp"
+            val actions = o["Actions"] as? JsonObject
+            fun target(name: String) = (actions?.get(name) as? JsonObject)?.string("target")
+            return VirtualMedia(
+                path = path,
+                image = o.string("Image"),
+                inserted = (o["Inserted"] as? JsonPrimitive)?.booleanOrNull ?: (o.string("Image") != null),
+                bootOnNextReset = ((oem?.get(oemKey) as? JsonObject)?.get("BootOnNextServerReset") as? JsonPrimitive)?.booleanOrNull,
+                insertTarget = target("#VirtualMedia.InsertMedia"),
+                ejectTarget = target("#VirtualMedia.EjectMedia"),
+                oemKey = oemKey,
+            )
+        }
+        return null
+    }
+
+    /**
+     * Connects the image at [url] (http/https URL reachable *by the iLO*) to the virtual CD/DVD
+     * drive, optionally booting from it on the next server reset.
+     */
+    fun redfishInsertMedia(username: String, password: String, media: VirtualMedia, url: String, bootOnNextReset: Boolean) {
+        val auth = basicAuth(username, password)
+        if (media.inserted) redfishEjectMedia(username, password, media)
+        val insert = buildJsonObject { put("Image", url) }.toString()
+        val r = if (media.insertTarget != null) {
+            request("POST", media.insertTarget, body = insert, headers = auth, contentType = JSON)
+        } else {
+            request("PATCH", media.path, body = insert, headers = auth, contentType = JSON)
+        }
+        checkRedfish(r)
+        if (bootOnNextReset) {
+            val body = buildJsonObject {
+                put("Oem", buildJsonObject { put(media.oemKey, buildJsonObject { put("BootOnNextServerReset", true) }) })
+            }.toString()
+            checkRedfish(request("PATCH", media.path, body = body, headers = auth, contentType = JSON))
+        }
+    }
+
+    fun redfishEjectMedia(username: String, password: String, media: VirtualMedia) {
+        val auth = basicAuth(username, password)
+        val r = if (media.ejectTarget != null) {
+            request("POST", media.ejectTarget, body = "{}", headers = auth, contentType = JSON)
+        } else {
+            request("PATCH", media.path, body = "{\"Image\":null}", headers = auth, contentType = JSON)
+        }
+        checkRedfish(r)
+    }
+
     fun redfishReset(username: String, password: String, type: ResetType) {
         val body = buildJsonObject { put("ResetType", type.redfish) }.toString()
         val r = request(
@@ -179,7 +256,7 @@ class IloClient(address: String, private val pinnedFingerprint: String?) {
             "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset/",
             body = body,
             headers = basicAuth(username, password),
-            contentType = "application/json",
+            contentType = JSON,
         )
         checkRedfish(r)
     }
@@ -198,7 +275,7 @@ class IloClient(address: String, private val pinnedFingerprint: String?) {
     private fun extractRedfishMessage(o: JsonObject): String? {
         val err = o["error"] as? JsonObject ?: return null
         val ext = err["@Message.ExtendedInfo"]
-        val first = (ext as? kotlinx.serialization.json.JsonArray)?.firstOrNull() as? JsonObject
+        val first = (ext as? JsonArray)?.firstOrNull() as? JsonObject
         return first?.string("MessageId") ?: err.string("message")
     }
 
@@ -223,7 +300,13 @@ class IloClient(address: String, private val pinnedFingerprint: String?) {
             conn.sslSocketFactory = sslFactory
             // Identity is established by the pinned certificate, not by the host name.
             conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
-            conn.requestMethod = method
+            try {
+                conn.requestMethod = method
+            } catch (e: java.net.ProtocolException) {
+                // PATCH is not accepted by every HttpURLConnection implementation.
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("X-HTTP-Method-Override", method)
+            }
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
             conn.instanceFollowRedirects = false
@@ -254,6 +337,8 @@ class IloClient(address: String, private val pinnedFingerprint: String?) {
         runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
 
     companion object {
+        private const val JSON = "application/json"
+
         fun normalizeAddress(address: String): String =
             address.trim().removePrefix("https://").removePrefix("http://").trimEnd('/')
 
