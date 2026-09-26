@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">iLO Console</string>
+
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="confirm">Confirm</string>
+    <string name="retry">Retry</string>
+    <string name="save">Save</string>
+    <string name="back">Back</string>
+    <string name="more">More</string>
+    <string name="refresh">Refresh</string>
+    <string name="delete">Delete</string>
+    <string name="delete_confirm">Remove %1$s from the list?</string>
+
+    <string name="add_server">Add server</string>
+    <string name="edit_server">Edit server</string>
+    <string name="no_servers_title">No server yet</string>
+    <string name="no_servers_message">Add the address and credentials of an iLO 3, 4, 5 or 6 management processor to open its remote console.</string>
+
+    <string name="field_name">Name (optional)</string>
+    <string name="field_address">iLO address</string>
+    <string name="field_address_hint">Host name or IP, optionally with :port</string>
+    <string name="field_username">User name</string>
+    <string name="field_password">Password</string>
+    <string name="show_password">Show password</string>
+    <string name="field_layout">Server keyboard layout</string>
+    <string name="field_layout_hint">Layout configured on the remote operating system, used to type text.</string>
+    <string name="layout_us">English (US)</string>
+    <string name="layout_fr">French (AZERTY)</string>
+
+    <string name="cert_new_title">Unknown certificate</string>
+    <string name="cert_new_message">This iLO uses a certificate that is not trusted yet. iLO certificates are usually self-signed: check the fingerprint (Information → Security → SSL Certificate in the iLO web interface) before trusting it.</string>
+    <string name="cert_changed_title">Certificate changed!</string>
+    <string name="cert_changed_message">The certificate of this iLO is different from the one you trusted before. This happens after a certificate renewal or a system board replacement, but it can also mean the connection is being intercepted.</string>
+    <string name="cert_subject">Subject</string>
+    <string name="cert_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_trust">Trust</string>
+    <string name="cert_replace">Trust the new certificate</string>
+    <string name="cert_none">No certificate trusted yet</string>
+    <string name="cert_forget">Forget this certificate</string>
+
+    <string name="remote_console">Remote console</string>
+    <string name="web_interface">Web interface</string>
+    <string name="overview">Overview</string>
+    <string name="info_address">Address</string>
+    <string name="info_product">Model</string>
+    <string name="info_hostname">Host name</string>
+    <string name="info_serial">Serial number</string>
+    <string name="info_power">Power</string>
+    <string name="info_health">Health</string>
+    <string name="info_ilo">iLO</string>
+    <string name="info_bios">System ROM</string>
+
+    <string name="power_control">Power</string>
+    <string name="power_control_hint">Uses the Redfish API (iLO 4 firmware 2.x and later). With iLO 3, use the power menu of the remote console.</string>
+    <string name="power_on">Power on</string>
+    <string name="power_push">Momentary press (graceful shutdown)</string>
+    <string name="power_force_off">Force power off</string>
+    <string name="power_force_restart">Force restart</string>
+    <string name="power_press">Momentary press</string>
+    <string name="power_hold">Press and hold</string>
+    <string name="power_cold_boot">Cold boot</string>
+    <string name="power_reset">Reset</string>
+    <string name="power_confirm">Send this power action to %1$s?</string>
+    <string name="power_sent">Power action sent</string>
+
+    <string name="step_login">Logging in…</string>
+    <string name="step_rc_info">Retrieving console parameters…</string>
+    <string name="step_video">Opening the video channel…</string>
+    <string name="step_command">Starting the console…</string>
+
+    <string name="disconnect">Disconnect</string>
+    <string name="console_keyboard">Keyboard</string>
+    <string name="console_special_keys">Special keys</string>
+    <string name="console_refresh">Refresh screen</string>
+    <string name="console_fit">Fit to screen</string>
+    <string name="console_no_signal">No video signal</string>
+    <string name="console_unlicensed">No iLO Advanced licence</string>
+    <string name="console_encrypted">Encrypted</string>
+    <string name="console_not_encrypted">Not encrypted</string>
+
+    <string name="notice_share_denied">%1$s (%2$s) asked to share the console. The request was declined.</string>
+    <string name="notice_seized">The console was taken over by %1$s (%2$s).</string>
+    <string name="notice_unauthorized">This user is not allowed to perform this action.</string>
+    <string name="notice_firmware">An iLO firmware update is in progress.</string>
+
+    <string name="error_title">Error</string>
+    <string name="error_unknown">Unknown error</string>
+    <string name="error_with_detail">Error: %1$s</string>
+    <string name="error_auth">Login failed: check the user name and password.</string>
+    <string name="error_unknown_host">Unknown host name.</string>
+    <string name="error_unreachable">The iLO cannot be reached. Check the address and that your phone is on the management network (VPN…).</string>
+    <string name="error_timeout">The connection timed out.</string>
+    <string name="error_tls">Secure connection failed (TLS). Very old iLO firmware may use protocols that are no longer supported.</string>
+    <string name="error_not_supported">This feature is not supported by this iLO.</string>
+
+    <string name="close_rc_unavailable">The remote console is not available on this iLO.</string>
+    <string name="close_connect_failed">Cannot connect to the remote console port (17990 by default). Check that it is not blocked by a firewall.</string>
+    <string name="close_denied">Access to the remote console was denied. The user needs the \"Remote Console\" privilege.</string>
+    <string name="close_busy">The remote console is already in use by another user.</string>
+    <string name="close_no_free_session">No free remote console session is available.</string>
+    <string name="close_not_licensed">The remote console requires an iLO Advanced licence once the operating system is running.</string>
+    <string name="close_handshake">The iLO rejected the console connection.</string>
+    <string name="close_connection_lost">The connection with the iLO was lost.</string>
+    <string name="close_seized">Another user took over the remote console.</string>
+    <string name="close_server_closed">The iLO closed the remote console.</string>
+</resources>

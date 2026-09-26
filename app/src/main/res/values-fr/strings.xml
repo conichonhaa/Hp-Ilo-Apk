@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ok">OK</string>
+    <string name="cancel">Annuler</string>
+    <string name="close">Fermer</string>
+    <string name="confirm">Confirmer</string>
+    <string name="retry">Réessayer</string>
+    <string name="save">Enregistrer</string>
+    <string name="back">Retour</string>
+    <string name="more">Plus</string>
+    <string name="refresh">Actualiser</string>
+    <string name="delete">Supprimer</string>
+    <string name="delete_confirm">Retirer %1$s de la liste ?</string>
+
+    <string name="add_server">Ajouter un serveur</string>
+    <string name="edit_server">Modifier le serveur</string>
+    <string name="no_servers_title">Aucun serveur</string>
+    <string name="no_servers_message">Ajoutez l\'adresse et les identifiants d\'un processeur de gestion iLO 3, 4, 5 ou 6 pour ouvrir sa console distante.</string>
+
+    <string name="field_name">Nom (facultatif)</string>
+    <string name="field_address">Adresse de l\'iLO</string>
+    <string name="field_address_hint">Nom d\'hôte ou IP, éventuellement suivi de :port</string>
+    <string name="field_username">Utilisateur</string>
+    <string name="field_password">Mot de passe</string>
+    <string name="show_password">Afficher le mot de passe</string>
+    <string name="field_layout">Disposition du clavier du serveur</string>
+    <string name="field_layout_hint">Disposition configurée sur le système d\'exploitation distant, utilisée pour taper du texte.</string>
+    <string name="layout_us">Anglais (US)</string>
+    <string name="layout_fr">Français (AZERTY)</string>
+
+    <string name="cert_new_title">Certificat inconnu</string>
+    <string name="cert_new_message">Cet iLO présente un certificat qui n\'est pas encore approuvé. Les certificats iLO sont en général auto-signés : vérifiez l\'empreinte (Information → Sécurité → Certificat SSL dans l\'interface web de l\'iLO) avant de l\'approuver.</string>
+    <string name="cert_changed_title">Le certificat a changé !</string>
+    <string name="cert_changed_message">Le certificat de cet iLO est différent de celui approuvé précédemment. Cela arrive après un renouvellement du certificat ou un remplacement de carte mère, mais cela peut aussi indiquer une interception de la connexion.</string>
+    <string name="cert_subject">Sujet</string>
+    <string name="cert_fingerprint">Empreinte SHA-256</string>
+    <string name="cert_trust">Approuver</string>
+    <string name="cert_replace">Approuver le nouveau certificat</string>
+    <string name="cert_none">Aucun certificat approuvé</string>
+    <string name="cert_forget">Oublier ce certificat</string>
+
+    <string name="remote_console">Console distante</string>
+    <string name="web_interface">Interface web</string>
+    <string name="overview">Vue d\'ensemble</string>
+    <string name="info_address">Adresse</string>
+    <string name="info_product">Modèle</string>
+    <string name="info_hostname">Nom d\'hôte</string>
+    <string name="info_serial">Numéro de série</string>
+    <string name="info_power">Alimentation</string>
+    <string name="info_health">État</string>
+    <string name="info_ilo">iLO</string>
+    <string name="info_bios">ROM système</string>
+
+    <string name="power_control">Alimentation</string>
+    <string name="power_control_hint">Utilise l\'API Redfish (iLO 4 firmware 2.x et plus récent). Avec un iLO 3, utilisez le menu d\'alimentation de la console distante.</string>
+    <string name="power_on">Allumer</string>
+    <string name="power_push">Appui bref (arrêt propre)</string>
+    <string name="power_force_off">Forcer l\'arrêt</string>
+    <string name="power_force_restart">Forcer le redémarrage</string>
+    <string name="power_press">Appui bref</string>
+    <string name="power_hold">Appui long</string>
+    <string name="power_cold_boot">Démarrage à froid</string>
+    <string name="power_reset">Réinitialiser</string>
+    <string name="power_confirm">Envoyer cette action d\'alimentation à %1$s ?</string>
+    <string name="power_sent">Action d\'alimentation envoyée</string>
+
+    <string name="step_login">Connexion…</string>
+    <string name="step_rc_info">Récupération des paramètres de la console…</string>
+    <string name="step_video">Ouverture du canal vidéo…</string>
+    <string name="step_command">Démarrage de la console…</string>
+
+    <string name="disconnect">Déconnecter</string>
+    <string name="console_keyboard">Clavier</string>
+    <string name="console_special_keys">Touches spéciales</string>
+    <string name="console_refresh">Rafraîchir l\'écran</string>
+    <string name="console_fit">Ajuster à l\'écran</string>
+    <string name="console_no_signal">Pas de signal vidéo</string>
+    <string name="console_unlicensed">Pas de licence iLO Advanced</string>
+    <string name="console_encrypted">Chiffré</string>
+    <string name="console_not_encrypted">Non chiffré</string>
+
+    <string name="notice_share_denied">%1$s (%2$s) a demandé à partager la console. La demande a été refusée.</string>
+    <string name="notice_seized">La console a été reprise par %1$s (%2$s).</string>
+    <string name="notice_unauthorized">Cet utilisateur n\'a pas le droit d\'effectuer cette action.</string>
+    <string name="notice_firmware">Une mise à jour du firmware de l\'iLO est en cours.</string>
+
+    <string name="error_title">Erreur</string>
+    <string name="error_unknown">Erreur inconnue</string>
+    <string name="error_with_detail">Erreur : %1$s</string>
+    <string name="error_auth">Échec de la connexion : vérifiez l\'utilisateur et le mot de passe.</string>
+    <string name="error_unknown_host">Nom d\'hôte inconnu.</string>
+    <string name="error_unreachable">L\'iLO est injoignable. Vérifiez l\'adresse et que le téléphone a accès au réseau d\'administration (VPN…).</string>
+    <string name="error_timeout">Délai de connexion dépassé.</string>
+    <string name="error_tls">Échec de la connexion sécurisée (TLS). Les très anciens firmwares iLO utilisent parfois des protocoles qui ne sont plus pris en charge.</string>
+    <string name="error_not_supported">Cette fonction n\'est pas prise en charge par cet iLO.</string>
+
+    <string name="close_rc_unavailable">La console distante n\'est pas disponible sur cet iLO.</string>
+    <string name="close_connect_failed">Impossible de se connecter au port de la console distante (17990 par défaut). Vérifiez qu\'il n\'est pas bloqué par un pare-feu.</string>
+    <string name="close_denied">Accès à la console distante refusé. L\'utilisateur doit avoir le privilège « Remote Console ».</string>
+    <string name="close_busy">La console distante est déjà utilisée par un autre utilisateur.</string>
+    <string name="close_no_free_session">Aucune session de console distante disponible.</string>
+    <string name="close_not_licensed">La console distante nécessite une licence iLO Advanced une fois le système d\'exploitation démarré.</string>
+    <string name="close_handshake">L\'iLO a refusé la connexion à la console.</string>
+    <string name="close_connection_lost">La connexion avec l\'iLO a été perdue.</string>
+    <string name="close_seized">Un autre utilisateur a pris le contrôle de la console distante.</string>
+    <string name="close_server_closed">L\'iLO a fermé la console distante.</string>
+</resources>
