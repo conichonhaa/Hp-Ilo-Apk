@@ -6,6 +6,7 @@ import android.net.Uri
 import android.net.http.SslCertificate
 import android.net.http.SslError
 import android.os.Build
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
@@ -219,6 +220,9 @@ private fun createWebView(
     onError: (String) -> Unit,
     log: (String) -> Unit,
 ): WebView = WebView(ctx).apply {
+    // With the default WRAP_CONTENT height, "height: 100%" in the page resolves to 0 and the
+    // iLO 4 interface (a full-height iframe) stays invisible.
+    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     // Allows inspecting the page from a computer with chrome://inspect.
     WebView.setWebContentsDebuggingEnabled(true)
     log("WebView ${WebView.getCurrentWebViewPackage()?.versionName ?: "?"}")
