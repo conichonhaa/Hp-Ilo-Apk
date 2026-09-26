@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Version to publish as a GitHub release (e.g. v2.0.0); leave empty to only build"
+        description: "Release version (e.g. v2.0.1); empty = the app's versionName"
         required: false
         default: ""
 
@@ -55,21 +55,39 @@ jobs:
             app/build/outputs/apk/release/*.apk
 
   release:
-    # Push a tag such as v2.0.0, or run the workflow manually with a version, to publish a release.
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
+    # Push a tag such as v2.0.0, or run the workflow manually, to publish a release.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Choose the release version
+        id: version
+        env:
+          REQUESTED: ${{ inputs.release }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            v="$GITHUB_REF_NAME"
+          elif [ -n "$REQUESTED" ]; then
+            v="$REQUESTED"
+          else
+            v="v$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)"
+          fi
+          case "$v" in v*) ;; *) v="v$v" ;; esac
+          echo "Publishing $v"
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           name: ilo-console-apk
           path: apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release || github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: iLO Console ${{ inputs.release || github.ref_name }}
+          name: iLO Console ${{ steps.version.outputs.tag }}
           generate_release_notes: true
-          files: apk/**/*.apk
+          files: apk/release/*.apk
