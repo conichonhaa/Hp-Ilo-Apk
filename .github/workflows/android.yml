@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Version to publish as a GitHub release (e.g. v2.0.0); leave empty to only build"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -50,8 +55,8 @@ jobs:
             app/build/outputs/apk/release/*.apk
 
   release:
-    # Push a tag such as v2.0.0 to publish the APK as a GitHub release.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Push a tag such as v2.0.0, or run the workflow manually with a version, to publish a release.
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -63,4 +68,8 @@ jobs:
           path: apk
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: iLO Console ${{ inputs.release || github.ref_name }}
+          generate_release_notes: true
           files: apk/**/*.apk
