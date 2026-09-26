@@ -162,6 +162,9 @@ fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit
                             Column(Modifier.fillMaxSize().padding(12.dp)) {
                                 androidx.compose.foundation.layout.Row {
                                     Text(stringResource(R.string.web_diagnostics), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                    TextButton(onClick = {
+                                        webView?.evaluateJavascript(SNAPSHOT_SCRIPT) { json -> log += "SNAPSHOT: $json" }
+                                    }) { Text(stringResource(R.string.web_snapshot)) }
                                     TextButton(onClick = { clipboard.setText(AnnotatedString(log.joinToString("\n"))) }) {
                                         Text(stringResource(R.string.web_copy))
                                     }
@@ -237,7 +240,7 @@ private fun createWebView(
         override fun onProgressChanged(view: WebView, newProgress: Int) = onProgress(newProgress)
 
         override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-            if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR || message.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
+            run {
                 log("JS ${message.messageLevel()}: ${message.message()} (${message.sourceId()?.substringAfterLast('/')}:${message.lineNumber()})")
             }
             return true
@@ -266,6 +269,12 @@ private fun createWebView(
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             log("Load error ${error.errorCode} ${error.description} for ${request.url}")
             if (request.isForMainFrame) onError("${error.description} (${error.errorCode})")
+        }
+
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+            val url = request.url.toString()
+            view.post { log("GET ${url.removePrefix("https://" + request.url.host)}") }
+            return null
         }
 
         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
@@ -337,3 +346,22 @@ private fun certificateBytes(cert: SslCertificate?): ByteArray? {
         (CertificateFactory.getInstance("X.509").generateCertificate(ByteArrayInputStream(bytes)) as X509Certificate).encoded
     }.getOrNull()
 }
+
+/** Describes the rendered page, to understand why it may look blank. */
+private val SNAPSHOT_SCRIPT = """
+    (function() {
+      var b = document.body, d = document.documentElement;
+      function vis(el) { var st = getComputedStyle(el); return st.display + '/' + st.visibility + '/' + st.opacity; }
+      return JSON.stringify({
+        url: location.href, state: document.readyState, title: document.title,
+        ua: navigator.userAgent,
+        viewport: innerWidth + 'x' + innerHeight, scroll: d.scrollWidth + 'x' + d.scrollHeight,
+        body: b ? (b.offsetWidth + 'x' + b.offsetHeight + ' ' + vis(b)) : null,
+        frames: Array.prototype.map.call(document.querySelectorAll('iframe,frame'), function(f) { return f.src + ' ' + f.offsetWidth + 'x' + f.offsetHeight; }),
+        scripts: Array.prototype.map.call(document.scripts, function(s) { return s.src || ('inline:' + s.text.length); }),
+        cookies: document.cookie.replace(/=[^;]*/g, '=...'),
+        text: (b ? b.innerText : '').substring(0, 400),
+        html: d.outerHTML.substring(0, 6000)
+      });
+    })();
+""".trimIndent()
