@@ -1,214 +1,261 @@
 package io.github.conichonhaa.ilo.ui.web
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.net.http.SslCertificate
 import android.net.http.SslError
 import android.os.Build
-import android.webkit.CookieManager
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.conichonhaa.ilo.R
 import io.github.conichonhaa.ilo.core.net.CertificatePinning
 import io.github.conichonhaa.ilo.core.net.IloClient
-import io.github.conichonhaa.ilo.core.net.IloSession
 import io.github.conichonhaa.ilo.data.ServerConfig
 import io.github.conichonhaa.ilo.data.ServerRepository
 import io.github.conichonhaa.ilo.ui.common.CertPrompt
 import io.github.conichonhaa.ilo.ui.common.CertificateDialog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 
-data class WebUiState(
-    val server: ServerConfig? = null,
-    /** Set once the page can be loaded (after an optional automatic login). */
-    val ready: Boolean = false,
-    val sessionKey: String? = null,
-    val certPrompt: CertPrompt? = null,
-)
-
-class WebViewModel(private val repository: ServerRepository, private val serverId: String) : ViewModel() {
-    private val _state = MutableStateFlow(WebUiState())
-    val state: StateFlow<WebUiState> = _state.asStateFlow()
-    private var session: IloSession? = null
-    private var client: IloClient? = null
-
-    init {
-        prepare()
-    }
-
-    /** Logs in through the JSON API so the web interface opens already authenticated. */
-    fun prepare() {
-        viewModelScope.launch {
-            val s = repository.get(serverId) ?: return@launch
-            _state.update { it.copy(server = s, ready = false, certPrompt = null) }
-            val c = IloClient(s.address, s.certFingerprint)
-            client = c
-            val result = withContext(Dispatchers.IO) { runCatching { c.login(s.username, s.password) } }
-            session = result.getOrNull()
-            val prompt = CertPrompt.from(result.exceptionOrNull())
-            _state.update {
-                it.copy(ready = prompt == null, sessionKey = session?.sessionKey, certPrompt = prompt)
-            }
-        }
-    }
-
-    fun acceptCertificate(prompt: CertPrompt) {
-        viewModelScope.launch {
-            repository.setFingerprint(serverId, prompt.fingerprint)
-            prepare()
-        }
-    }
-
-    override fun onCleared() {
-        val c = client
-        val s = session ?: return
-        Thread { c?.logout(s) }.start()
-    }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
+/**
+ * The iLO web interface in a WebView. The iLO login page is shown normally, with the stored
+ * credentials filled in; the certificate is checked against the pinned fingerprint.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebScreen(repository: ServerRepository, serverId: String, onBack: () -> Unit) {
-    val vm: WebViewModel = viewModel(
-        key = "web-$serverId",
-        factory = viewModelFactory { initializer { WebViewModel(repository, serverId) } },
-    )
-    val state by vm.state.collectAsStateWithLifecycle()
+    val server by remember(serverId) {
+        repository.servers.map { list -> list.firstOrNull { it.id == serverId } }
+    }.collectAsStateWithLifecycle(initialValue = null)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableIntStateOf(0) }
     var canGoBack by remember { mutableStateOf(false) }
-    var sslMismatch by remember { mutableStateOf<CertPrompt?>(null) }
+    var certPrompt by remember { mutableStateOf<CertPrompt?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+
+    val baseUrl = server?.let { IloClient.normalizeAddress(it.address) }?.let { "https://$it/" }
+
+    fun openExternally() {
+        baseUrl ?: return
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl))) }
+    }
 
     BackHandler(enabled = canGoBack) { webView?.goBack() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.server?.displayName ?: stringResource(R.string.web_interface)) },
+                title = { Text(server?.displayName ?: stringResource(R.string.web_interface)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = { webView?.reload() }) { Icon(Icons.Default.Refresh, stringResource(R.string.refresh)) }
+                    IconButton(onClick = {
+                        loadError = null
+                        webView?.reload()
+                    }) { Icon(Icons.Default.Refresh, stringResource(R.string.refresh)) }
+                    IconButton(onClick = ::openExternally) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, stringResource(R.string.web_open_browser))
+                    }
                 },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            if (progress in 1..99 || !state.ready) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-            val server = state.server
-            if (state.ready && server != null) {
-                val baseUrl = IloClient(server.address, server.certFingerprint).baseUrl
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.useWideViewPort = true
-                            settings.loadWithOverviewMode = true
-                            settings.builtInZoomControls = true
-                            settings.displayZoomControls = false
-                            webChromeClient = object : WebChromeClient() {
-                                override fun onProgressChanged(view: WebView, newProgress: Int) {
-                                    progress = newProgress
+            if (progress in 1..99) LinearProgressIndicator(Modifier.fillMaxWidth())
+            val s = server
+            if (s != null && baseUrl != null) {
+                Box(Modifier.fillMaxSize()) {
+                    // Recreate the WebView when the trusted certificate changes.
+                    key(s.certFingerprint) {
+                        AndroidView(
+                            modifier = Modifier.fillMaxSize(),
+                            factory = { ctx ->
+                                createWebView(
+                                    ctx = ctx,
+                                    server = s,
+                                    onProgress = { progress = it },
+                                    onHistory = { canGoBack = it },
+                                    onCertificate = { certPrompt = it },
+                                    onError = { loadError = it },
+                                ).also {
+                                    it.loadUrl(baseUrl)
+                                    webView = it
                                 }
+                            },
+                            onRelease = { it.destroy() },
+                        )
+                    }
+                    loadError?.let { message ->
+                        Surface(Modifier.fillMaxSize()) {
+                            Column(
+                                Modifier.fillMaxSize().padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                            ) {
+                                Text(stringResource(R.string.web_load_failed), style = MaterialTheme.typography.titleMedium)
+                                Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 12.dp))
+                                Button(onClick = ::openExternally) { Text(stringResource(R.string.web_open_browser)) }
                             }
-                            webViewClient = object : WebViewClient() {
-                                override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                                    val der = certificateBytes(error.certificate)
-                                    val fp = der?.let { CertificatePinning.fingerprint(it) }
-                                    if (fp != null && CertificatePinning.matches(fp, server.certFingerprint)) {
-                                        handler.proceed()
-                                    } else {
-                                        handler.cancel()
-                                        sslMismatch = CertPrompt(
-                                            fingerprint = fp ?: "?",
-                                            subject = error.certificate?.issuedTo?.dName ?: "?",
-                                            changed = server.certFingerprint != null,
-                                        )
-                                    }
-                                }
-
-                                override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-                                    canGoBack = view.canGoBack()
-                                }
-                            }
-                            val cookies = CookieManager.getInstance()
-                            cookies.setAcceptCookie(true)
-                            state.sessionKey?.let { cookies.setCookie(baseUrl, "sessionKey=$it; path=/; secure") }
-                            loadUrl("$baseUrl/")
-                            webView = this
                         }
-                    },
-                    onRelease = { it.destroy() },
-                )
+                    }
+                }
             }
         }
     }
 
-    state.certPrompt?.let { prompt ->
-        CertificateDialog(prompt, onAccept = { vm.acceptCertificate(prompt) }, onReject = onBack)
-    }
-    sslMismatch?.let { prompt ->
+    certPrompt?.let { prompt ->
         CertificateDialog(
             prompt,
             onAccept = {
-                sslMismatch = null
-                vm.acceptCertificate(prompt)
+                certPrompt = null
+                scope.launch { repository.setFingerprint(serverId, prompt.fingerprint) }
             },
             onReject = {
-                sslMismatch = null
+                certPrompt = null
                 onBack()
             },
         )
     }
 }
+
+@SuppressLint("SetJavaScriptEnabled")
+private fun createWebView(
+    ctx: android.content.Context,
+    server: ServerConfig,
+    onProgress: (Int) -> Unit,
+    onHistory: (Boolean) -> Unit,
+    onCertificate: (CertPrompt) -> Unit,
+    onError: (String) -> Unit,
+): WebView = WebView(ctx).apply {
+    settings.javaScriptEnabled = true
+    settings.domStorageEnabled = true
+    settings.javaScriptCanOpenWindowsAutomatically = true
+    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+    settings.useWideViewPort = true
+    settings.loadWithOverviewMode = true
+    settings.builtInZoomControls = true
+    settings.displayZoomControls = false
+    // Some iLO firmwares reject browsers they do not recognise: present a regular Chrome.
+    settings.userAgentString = settings.userAgentString
+        .replace("; wv", "")
+        .replace(Regex("Version/\\S+ "), "")
+
+    webChromeClient = object : WebChromeClient() {
+        override fun onProgressChanged(view: WebView, newProgress: Int) = onProgress(newProgress)
+    }
+    webViewClient = object : WebViewClient() {
+        override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+            val der = certificateBytes(error.certificate)
+            val fp = der?.let { CertificatePinning.fingerprint(it) }
+            if (fp != null && CertificatePinning.matches(fp, server.certFingerprint)) {
+                handler.proceed()
+            } else {
+                handler.cancel()
+                onCertificate(
+                    CertPrompt(
+                        fingerprint = fp ?: "?",
+                        subject = error.certificate?.issuedTo?.dName ?: "?",
+                        changed = server.certFingerprint != null,
+                    ),
+                )
+            }
+        }
+
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+            if (request.isForMainFrame) onError("${error.description} (${error.errorCode})")
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            view.evaluateJavascript(autofillScript(server.username, server.password), null)
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) = onHistory(view.canGoBack())
+    }
+}
+
+/**
+ * Fills (without submitting) the login form of the iLO web interface, which is rendered by
+ * JavaScript some time after the page load: poll for a password field for a few seconds.
+ */
+private fun autofillScript(user: String, password: String): String = """
+    (function() {
+      var user = ${JSONObject.quote(user)}, pass = ${JSONObject.quote(password)};
+      function set(el, v) {
+        var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(el, v);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      function tryFill(doc) {
+        var pw = doc.querySelector('input[type=password]');
+        if (!pw || pw.offsetParent === null || pw.value) return false;
+        var inputs = Array.prototype.slice.call(doc.querySelectorAll('input[type=text],input[type=email],input:not([type])'));
+        var name = inputs.filter(function(i) { return i.offsetParent !== null; })[0];
+        if (name && !name.value) set(name, user);
+        set(pw, pass);
+        return true;
+      }
+      var tries = 0;
+      var timer = setInterval(function() {
+        var done = false;
+        try { done = tryFill(document); } catch (e) {}
+        for (var i = 0; !done && i < window.frames.length; i++) {
+          try { done = tryFill(window.frames[i].document); } catch (e) {}
+        }
+        if (done || ++tries > 40) clearInterval(timer);
+      }, 250);
+    })();
+""".trimIndent()
 
 /** DER encoding of the certificate reported by the WebView. */
 private fun certificateBytes(cert: SslCertificate?): ByteArray? {

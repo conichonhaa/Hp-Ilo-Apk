@@ -24,7 +24,8 @@ l'ancienne application, pour l'interopérabilité ; aucun code ni ressource HPE 
   - état de l'alimentation, santé du serveur et codes POST en direct.
 - **Vue d'ensemble** du serveur (modèle, n° de série, état, firmware iLO/BIOS) via Redfish ou l'API
   JSON des anciens iLO, et **commandes d'alimentation Redfish**.
-- **Interface web** de l'iLO intégrée (session ouverte automatiquement).
+- **Interface web** de l'iLO intégrée (identifiants pré-remplis), avec un bouton pour l'ouvrir
+  dans le navigateur du téléphone si besoin.
 - **Sécurité TLS** : l'ancienne application acceptait n'importe quel certificat. Celle-ci épingle le
   certificat (souvent auto-signé) de chaque iLO à la première connexion après confirmation de son
   empreinte SHA-256, et alerte s'il change.
@@ -78,5 +79,6 @@ Prérequis : JDK 17+ et le SDK Android (API 35).
 
 ## Avertissement
 
-Projet indépendant, non affilié à Hewlett Packard Enterprise. « HPE » et « iLO » sont des marques de
+Projet indépendant, non affilié à Hewlett Packard Enterprise. L'icône de l'application est celle de l'application
+d'origine HPE iLO Mobile, reprise à la demande du propriétaire de ce dépôt pour un usage personnel. « HPE » et « iLO » sont des marques de
 Hewlett Packard Enterprise Development LP.
